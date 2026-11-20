@@ -27,6 +27,12 @@ $env:GOOGLE_API_KEY = "sua-chave-do-Gemini"
 # Opcional: $env:GEMINI_MODEL = "gemini-2.5-flash"
 python manage.py runserver
 ```
+Ou criando um env adicionando esse codigo:
+
+```env
+GEMINI_API_KEY=sua-chave-do-Gemini
+GEMINI_MODEL=gemini-3.1-flash-lite
+```
 
 O assistente sugere nome, aspecto e conceito a partir da ideia informada. A sugestão só preenche os campos depois que você escolher **Usar sugestão**; a ficha continua sendo criada pelo formulário normal. O texto da ideia é enviado ao Google Gemini. O `django-ai-sdk` está em versão de prévia e pode ter alterações incompatíveis; o projeto exige Python 3.12 ou superior por causa desse pacote.
 
