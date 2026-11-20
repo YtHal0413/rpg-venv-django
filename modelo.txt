@@ -1,0 +1,48 @@
+[Personagem: nome_personagem]
+*-  Resumo da sessão:*
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxx texto corrido resumindo o que ele fez xxx
+xxxxxxxxx com o contexto das cenas xxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+*-  Revisão da ficha:*
+(Varia de ficha para ficha, mas sempre segue
+a estrutura "{Título} > AÇÃO + COMPONENTE + 
+CONTEXTO" a formula não precisa seguir essa
+ordem exata. Sempre se referem à mudanças ao
+final da sessão. Seguem abaixo alguns Exemplos)
+
+{Itens/Coletáveis}:  
+> Comprou 1x Poção de Cura no Apotecário da vila
+> Usou a Chave Tenebrosa para abrir baú [xxxxx]
+> Perdeu a Espada durante a luta contra [xxxxx]
+> Achou 30 moedas após saquear a taverna
+> Gastou 23 balas de fuzil na perseguição
+
+{Status/Integridade}:  
+> Perdeu 60 PV no confronto com zumbis de sangue
+	| PV atual = < 40/100 >
+> Está sob a condição Exausto:
+	| Perde um passo em testes de Físico
+> Possui 3 pontos de Ímpeto
+	| pontos atuais = < 3/4 >
+> Os efeitos do ritual Miasma Entrópico sessam
+> Recebeu um Trauma temporário:
+	| Eritrofobia
+> Recebeu uma Lesão permanente:
+	| Mão esquerda amputada
+
+*-  Veredito:*
+("Sensação" do personagem ao fim da sessão,
+auxilia a interpretação da próxima, exatamente
+de onde parou. Segue abaixo alguns exemplos)
+
+> Ainda no calor do combate, está enfurecido.
+> Sente remorso pela perda de {personagem}
+> Atento ao arredores na trilha do bosque
+> Você enlouqueceu com a presença do Diabo e se torna uma casca vazia. Obrigado por jogar.
+> Você morreu nos braços de {personagem}. Obrigado por jogar.
+> Focado analisando as evidências do escritório
+> As pernas estão cansando e o fôlego se esvaindo. A criatura está quase te alcançando.

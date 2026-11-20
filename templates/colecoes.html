@@ -1,0 +1,97 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>RPG.Venv - Coleções</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script defer src="{% static 'js/chaves.js' %}"></script>
+        <link rel="stylesheet" href="{% static 'style/style.css' %}">
+    </head>
+    <body class="text-white min-h-screen flex flex-col justify-between relative overflow-x-hidden">
+        {% include 'partials/fundo.html' %}
+        {% include 'partials/nav_principal.html' with pagina_ativa='colecoes' %}
+        {% include 'partials/modal_loja_chaves.html' %}
+
+        <!-- Bloco: apresenta as coleções de fichas e campanhas do usuário. -->
+        <main class="flex-grow w-full max-w-7xl mx-auto px-4 py-8 space-y-6 z-10">
+            <section class="flex justify-between">
+                <div class="flex flex-col border-b ui-border w-[75%] justify-center">
+                    <h1 class="text-2xl font-black text-white">Minhas coleções</h1>
+                    <p class="mt-2 text-sm ui-text-muted">Acesse suas fichas de personagem e campanhas.</p>
+                </div>
+                <div class="rounded-3xl border ui-border ui-surface p-5 backdrop-blur-md sm:p-4" aria-labelledby="status-acesso">
+                    <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            {% if tem_acesso_ilimitado %}
+                                <h2 id="status-acesso" class="text-lg font-black text-white">Acesso <span class="ui-text-positive">Ilimitado</span> </h2>
+                                <p class="mt-1 text-sm ui-text-muted">Crie fichas e campanhas à vontade.</p>
+                            {% else %}
+                                <h2 id="status-acesso" class="text-lg font-black text-white">Acesso Básico</h2>
+                                <p class="mt-1 text-sm ui-text-muted">Até uma ficha e campanha ativa por vez.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="flex flex-row gap-2">
+                <section class="w-full rounded-3xl border ui-border ui-surface p-6 backdrop-blur-md sm:p-6" aria-labelledby="colecao-fichas">
+                    <div class="mb-5 flex flex-col gap-3 border-b ui-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 id="colecao-fichas" class="text-lg font-black text-white">Personagens</h2>
+                            <p class="mt-1 text-sm ui-text-muted">{{ fichas|length }} ficha{{ fichas|length|pluralize:"s" }}</p>
+                        </div>
+                        <a href="{% url 'personagens' %}" class="rounded-xl ui-action px-5 py-3 text-center text-sm font-black ui-button-copy transition ui-hover-accent">
+                            GERENCIAR
+                        </a>
+                    </div>
+                    {% if fichas %}
+                        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {% for ficha in fichas %}
+                                <a href="{% url 'criador' ficha_id=ficha.id %}" class="flex items-center gap-3 rounded-2xl border ui-border ui-component p-3 transition ui-hover-border-accent">
+                                    {% if ficha.avatar %}
+                                        <img src="{{ ficha.avatar }}" alt="" class="h-10 w-10 rounded-xl object-cover">
+                                    {% else %}
+                                        <span class="flex h-10 w-10 items-center justify-center rounded-xl ui-accent-soft font-bold ui-text-accent">{{ ficha.nome_personagem|first|upper }}</span>
+                                    {% endif %}
+                                    <span class="truncate font-semibold text-white">{{ ficha.nome_personagem }}</span>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="rounded-2xl border border-dashed ui-border py-8 text-center text-sm ui-text-muted">Nenhuma ficha criada ainda.</p>
+                    {% endif %}
+                </section>
+
+                <section class="w-full rounded-3xl border ui-border ui-surface p-6 backdrop-blur-md sm:p-6" aria-labelledby="colecao-campanhas">
+                    <div class="mb-5 flex flex-col gap-3 border-b ui-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 id="colecao-campanhas" class="text-lg font-black text-white">Campanhas</h2>
+                            <p class="mt-1 text-sm ui-text-muted">{{ campanhas|length }} campanha{{ campanhas|length|pluralize:"s" }}</p>
+                        </div>
+                        <a href="{% url 'campanhas' %}" class="rounded-xl ui-action px-5 py-3 text-center text-sm font-black ui-button-copy transition ui-hover-accent">
+                            GERENCIAR
+                        </a>
+                    </div>
+                    {% if campanhas %}
+                        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {% for campanha in campanhas %}
+                                <a href="{% url 'campanha' campanha_id=campanha.pk %}" class="rounded-2xl border ui-border ui-component p-4 transition ui-hover-border-accent">
+                                    <span class="block truncate font-semibold text-white">{{ campanha.titulo }}</span>
+                                    <span class="mt-1 block text-xs ui-text-muted">{% if campanha.mestre_id == user.pk %}Mestre{% else %}Participante{% endif %}</span>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="rounded-2xl border border-dashed ui-border py-8 text-center text-sm ui-text-muted">Você ainda não participa de campanhas.</p>
+                    {% endif %}
+                </section>
+            </div>
+
+        </main>
+
+        {% include 'partials/rodape.html' %}
+    </body>
+</html>
