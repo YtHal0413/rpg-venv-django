@@ -1,0 +1,74 @@
+<div id="modal_chaves"
+    class="{% if request.GET.loja != '1' %}hidden{% endif %} fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto ui-overlay p-4 backdrop-blur-md"
+    aria-hidden="{% if request.GET.loja == '1' %}false{% else %}true{% endif %}">
+    <section role="dialog" aria-modal="true" aria-labelledby="titulo_modal_chaves"
+        class="relative my-auto w-full max-w-2xl space-y-6 rounded-3xl border ui-border ui-surface p-6 shadow-2xl sm:p-8">
+        <button type="button" data-fechar-modal
+            class="absolute right-4 top-4 rounded-lg p-2 ui-text-muted ui-hover-component ui-hover-heading"
+            aria-label="Fechar loja de chaves">✕</button>
+
+        <div class="space-y-2 pr-8">
+            <p class="text-xs font-bold uppercase tracking-widest ui-text-accent">RPG.Venv</p>
+            <h2 id="titulo_modal_chaves" class="text-2xl font-black text-white">Adquirir chaves</h2>
+            {% if user.tem_chave %}
+                <p class="text-sm ui-text-positive">Acesso ilimitado ativo nesta conta.</p>
+            {% else %}
+                <p class="text-sm ui-text-muted">Receba acesso ilimitado para criar fichas e campanhas e participar sem os limites do plano básico.</p>
+            {% endif %}
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-3" aria-label="Pacotes de chaves">
+            <article class="rounded-2xl border ui-border-accent ui-accent-soft p-4">
+                <p class="text-xs font-bold uppercase tracking-wider ui-text-accent">Pacote inicial</p>
+                <p class="mt-2 text-2xl font-black text-white">1 chave</p>
+                <form action="{% url 'comprar_chave' %}" method="post" class="mt-4" data-confirmar-compra>
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <input type="hidden" name="pacote" value="1">
+                    <button type="submit"
+                        class="w-full rounded-xl ui-action px-4 py-2 text-sm font-black ui-button-copy transition ui-hover-accent">
+                        Comprar
+                    </button>
+                </form>
+            </article>
+            <article class="rounded-2xl border ui-border ui-component-soft p-4 opacity-70">
+                <p class="text-xs font-bold uppercase tracking-wider ui-text-copy">Pacote médio</p>
+                <p class="mt-2 text-2xl font-black text-white">5 chaves</p>
+                <button type="button" disabled
+                    class="mt-4 w-full cursor-not-allowed rounded-xl border ui-border px-4 py-2 text-sm font-bold ui-text-muted">
+                    Em breve
+                </button>
+            </article>
+            <article class="rounded-2xl border ui-border ui-component-soft p-4 opacity-70">
+                <p class="text-xs font-bold uppercase tracking-wider ui-text-copy">Pacote grande</p>
+                <p class="mt-2 text-2xl font-black text-white">10 chaves</p>
+                <button type="button" disabled
+                    class="mt-4 w-full cursor-not-allowed rounded-xl border ui-border px-4 py-2 text-sm font-bold ui-text-muted">
+                    Em breve
+                </button>
+            </article>
+        </div>
+
+        <div class="space-y-3 border-t ui-border pt-5">
+            <div>
+                <h3 class="text-lg font-bold text-white">Resgatar chave</h3>
+                <p class="mt-1 text-xs ui-text-muted">A chave só pode ser resgatada uma vez pela conta que a adquiriu. Você também pode consultá-la no perfil.</p>
+            </div>
+            <form action="{% url 'resgatar_chave' %}" method="post" class="flex flex-col gap-3 sm:flex-row">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <label for="codigo_chave_resgate" class="sr-only">Chave de acesso</label>
+                <input id="codigo_chave_resgate" name="codigo" type="text" required maxlength="18"
+                    pattern="[A-Za-z0-9]{4}(-[A-Za-z0-9]{4}){2}-[A-Za-z0-9]{3}"
+                    autocomplete="off" autocapitalize="characters" placeholder="XXXX-YYYY-ZZZZ-AAA"
+                    class="min-w-0 flex-1 rounded-xl border ui-border ui-surface px-4 py-3 font-mono text-sm text-white outline-none transition placeholder:ui-text-muted ui-focus-border focus:ring-2 ui-focus-ring">
+                <button type="submit"
+                    class="rounded-xl border ui-border-accent px-5 py-3 text-sm font-black ui-text-accent transition ui-hover-accent-soft">
+                    Resgatar
+                </button>
+            </form>
+        </div>
+
+        <p class="text-[11px] ui-text-muted">Compra demonstrativa, sem cobrança. A chave ficará disponível na aba de chaves do seu perfil.</p>
+    </section>
+</div>
