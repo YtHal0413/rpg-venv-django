@@ -164,6 +164,11 @@ urlpatterns = [
         views.parar_sessao_campanha_view,
         name="parar_sessao_campanha",
     ),
+    path(
+        "api/campanha/<int:campanha_id>/chatbot/",
+        views.api_chatbot_campanha,
+        name="api_chatbot_campanha",
+    ),
 ]
 
 urlpatterns += [

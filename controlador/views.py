@@ -73,6 +73,12 @@ from .services import (
     resgatar_chave,
     tem_acesso_ilimitado,
 )
+from .chatbot import (
+    GeminiIndisponivel,
+    enviar_comando,
+    gerar_relatorio,
+    personagens_faltosos,
+)
 
 
 def _safe_next_url(request, next_url):
@@ -1210,6 +1216,9 @@ def campanha_detalhes(request, campanha_id):
         campanha=campanha,
         encerrada_em__isnull=True,
     ).first()
+    personagens_faltosos_sessao = (
+        personagens_faltosos(sessao_atual) if sessao_atual else []
+    )
 
     return render(
         request,
@@ -1225,6 +1234,7 @@ def campanha_detalhes(request, campanha_id):
             "templates_disponiveis": templates_disponiveis,
             "template_mestre": campanha.template_mestre,
             "sessao_atual": sessao_atual,
+            "personagens_faltosos": personagens_faltosos_sessao,
             "historico_sessoes": (
                 campanha.sessoes.all() if eh_mestre else SessaoCampanha.objects.none()
             ),
@@ -1236,6 +1246,11 @@ def campanha_detalhes(request, campanha_id):
             "parar_sessao_url": reverse(
                 "parar_sessao_campanha",
                 args=[campanha.pk],
+            ),
+            "chatbot_url": (
+                reverse("api_chatbot_campanha", args=[campanha.pk])
+                if sessao_atual
+                else ""
             ),
         },
     )
@@ -1433,6 +1448,7 @@ def parar_sessao_campanha_view(request, campanha_id):
         sessao = parar_sessao(campanha)
     except ValidationError as error:
         return JsonResponse({"erro": " ".join(error.messages)}, status=409)
+    gerar_relatorio(sessao)
     return JsonResponse(
         {
             "id": sessao.pk,
@@ -1440,6 +1456,37 @@ def parar_sessao_campanha_view(request, campanha_id):
             "duracao_segundos": sessao.duracao_segundos,
         }
     )
+
+
+@login_required
+@require_POST
+def api_chatbot_campanha(request, campanha_id):
+    campanha = _campanha_do_mestre(request, campanha_id)
+    sessao = SessaoCampanha.objects.filter(
+        campanha=campanha,
+        encerrada_em__isnull=True,
+    ).first()
+    if sessao is None:
+        return JsonResponse(
+            {"erro": "Inicie uma sessão antes de usar o chatbot."},
+            status=409,
+        )
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        payload = {}
+    comando = str(payload.get("comando", "")).strip()
+    if not comando:
+        return JsonResponse(
+            {"erro": "Informe um comando para o chatbot."},
+            status=400,
+        )
+    if len(comando) > 4000:
+        return JsonResponse(
+            {"erro": "O comando deve ter no máximo 4.000 caracteres."},
+            status=400,
+        )
+    return JsonResponse(enviar_comando(sessao, comando))
 
 
 @require_POST

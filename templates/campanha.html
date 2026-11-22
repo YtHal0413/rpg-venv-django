@@ -20,6 +20,7 @@
             data-presence-url="{{ presenca_url }}"
             data-start-session-url="{{ iniciar_sessao_url }}"
             data-stop-session-url="{{ parar_sessao_url }}"
+            data-chatbot-url="{{ chatbot_url }}"
             class="flex-grow w-full max-w-7xl mx-auto px-4 py-8 space-y-6 relative z-10"
             >
             <div class="flex flex-row gap-4">
@@ -186,11 +187,20 @@
                                 <h2 class="text-lg font-black">Personagens da mesa</h2>
                                 <p class="mt-1 text-xs ui-text-muted">A ficha só fica visível de acordo com sua configuração de acesso.</p>
                             </div>
-                            <button type="button" class="rounded-lg ui-action p-3 text-xs font-black ui-button-copy" onclick="document.getElementById('form-vincular-ficha').classList.toggle('hidden')">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                                </svg>
-                            </button>
+                            <div class="flex items-center gap-2">
+                                {% if eh_mestre and sessao_atual %}
+                                    <button type="button" id="botao-chatbot-campanha" onclick="abrirChatbotCampanha()" class="rounded-lg ui-action p-3 text-xs font-black ui-button-copy" title="Chatbot com IA" aria-label="Chatbot com IA" aria-controls="painel-chatbot-campanha">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM12 3.75c-4.556 0-8.25 3.186-8.25 7.125 0 2.213 1.17 4.183 3 5.475l-.75 3.15 3.45-1.725c.81.162 1.642.225 2.55.225 4.556 0 8.25-3.186 8.25-7.125S16.556 3.75 12 3.75Z" />
+                                        </svg>
+                                    </button>
+                                {% endif %}
+                                <button type="button" class="rounded-lg ui-action p-3 text-xs font-black ui-button-copy" title="Adicionar personagem" aria-label="Adicionar personagem" onclick="document.getElementById('form-vincular-ficha').classList.toggle('hidden')">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                         <form id="form-vincular-ficha" action="{% url 'vincular_ficha_campanha' campanha_id=campanha.pk %}" method="post" class="hidden mt-4 flex flex-col gap-2 sm:flex-row">
                             {% csrf_token %}
@@ -231,8 +241,32 @@
                 </aside>
             </div>
         </main>
+        {% if eh_mestre and sessao_atual %}
+            <aside id="painel-chatbot-campanha" class="hidden fixed bottom-0 right-0 z-40 h-[min(720px,calc(100vh-32px))] w-full max-w-md border-l ui-border ui-surface p-5 shadow-2xl sm:m-4 sm:rounded-3xl" role="dialog" aria-modal="true" aria-labelledby="titulo-chatbot-campanha">
+                <div class="flex h-full flex-col">
+                    <div class="flex items-start justify-between border-b ui-border pb-4">
+                        <div>
+                            <h2 id="titulo-chatbot-campanha" class="text-lg font-black">Chatbot com IA</h2>
+                            <p class="mt-1 text-xs ui-text-muted">
+                                {% for ficha in personagens_faltosos %}{{ ficha.ficha__nome }}{% if not forloop.last %}, {% endif %}{% empty %}Nenhum personagem faltoso{% endfor %}
+                            </p>
+                        </div>
+                        <button type="button" onclick="fecharChatbotCampanha()" class="rounded-lg p-2 ui-text-muted ui-hover-component" aria-label="Fechar chatbot">✕</button>
+                    </div>
+                    <div id="chatbot-mensagens" class="min-h-0 flex-1 space-y-3 overflow-y-auto py-4" aria-live="polite">
+                        <p class="rounded-2xl ui-component p-3 text-sm ui-text-copy">Comande as ações dos personagens faltosos nesta cena.</p>
+                    </div>
+                    <form id="form-chatbot-campanha" class="flex gap-2 border-t ui-border pt-4">
+                        <label class="sr-only" for="comando-chatbot-campanha">Comando do mestre</label>
+                        <input id="comando-chatbot-campanha" name="comando" maxlength="4000" required placeholder="Ex.: Role percepção e investigue a porta..." class="min-w-0 flex-1 rounded-xl border ui-border ui-surface px-3 py-3 text-sm text-white outline-none ui-focus-border">
+                        <button class="rounded-xl ui-action px-4 py-3 text-xs font-black ui-button-copy">ENVIAR</button>
+                    </form>
+                </div>
+            </aside>
+        {% endif %}
         {% if eh_mestre %}
-            <div id="modal-historico-sessoes" class="hidden fixed inset-0 z-50 flex items-center justify-center ui-overlay p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="titulo-historico-sessoes" aria-hidden="true" onclick="if (event.target === this) fecharHistoricoSessoes()">
+            <div id="modal-historico-sessoes" class="hidden fixed inset-0 z-50 items-center justify-center ui-overlay p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="titulo-historico-sessoes" aria-hidden="true" onclick="if (event.target === this) fecharHistoricoSessoes()">
+                <div class="flex max-h-[90vh] w-full max-w-6xl items-start justify-center gap-4">
                 <section class="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border ui-border ui-surface p-6 shadow-2xl sm:p-8">
                     <button type="button" id="fechar-historico-sessoes" onclick="fecharHistoricoSessoes()" class="absolute right-4 top-4 rounded-lg p-2 ui-text-muted transition ui-hover-component ui-hover-heading" aria-label="Fechar histórico de sessões">✕</button>
                     <h2 id="titulo-historico-sessoes" class="pr-10 text-xl font-black">Histórico de sessões</h2>
@@ -247,13 +281,46 @@
                                     <p class="mt-1 text-xs ui-text-muted">Duração: {{ sessao.duracao_segundos }} segundos</p>
                                 {% endif %}
                                 <p class="mt-2 text-[10px] ui-text-muted">Presentes: {% for presente in sessao.participantes_json %}{{ presente.nome }}{% if not forloop.last %}, {% endif %}{% empty %}Nenhum{% endfor %}</p>
-                                {% if sessao.relatorio_json %}<pre class="mt-2 whitespace-pre-wrap text-xs ui-text-copy">{{ sessao.relatorio_json }}</pre>{% endif %}
+                                {% if sessao.relatorio_json %}
+                                    <button type="button" onclick="abrirRelatorioSessao({{ sessao.pk }})" class="mt-3 rounded-lg border ui-border-accent px-3 py-2 text-xs font-bold ui-text-accent ui-hover-accent-soft">VER RELATÓRIO DA IA</button>
+                                {% endif %}
                             </article>
                         {% empty %}
                             <p class="rounded-2xl border border-dashed ui-border py-8 text-center text-sm ui-text-muted">Nenhuma sessão registrada.</p>
                         {% endfor %}
                     </div>
                 </section>
+                <aside id="container-relatorio-sessoes" class="hidden max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border ui-border ui-surface p-6 shadow-2xl">
+                    <div class="flex items-center justify-between border-b ui-border pb-3">
+                        <h3 class="font-black">Relatório da sessão</h3>
+                        <button type="button" onclick="fecharRelatorioSessao()" class="rounded-lg p-2 ui-text-muted ui-hover-component" aria-label="Fechar relatório">✕</button>
+                    </div>
+                    {% for sessao in historico_sessoes %}
+                        {% if sessao.relatorio_json %}
+                            <div id="relatorio-sessao-{{ sessao.pk }}" class="relatorio-sessao hidden mt-4 space-y-5">
+                                {% for personagem in sessao.relatorio_json.personagens %}
+                                    <article class="rounded-2xl ui-component p-4">
+                                        <h4 class="font-black ui-text-accent">Personagem: {{ personagem.personagem }}</h4>
+                                        <p class="mt-3 text-xs font-bold">Resumo da sessão</p>
+                                        <p class="mt-1 whitespace-pre-wrap text-xs ui-text-copy">{{ personagem.resumo }}</p>
+                                        <p class="mt-4 text-xs font-bold">Revisão da ficha</p>
+                                        {% for bloco in personagem.revisao %}
+                                            <p class="mt-2 text-xs font-semibold">{{ bloco.titulo }}:</p>
+                                            {% for acao in bloco.acoes %}
+                                                <p class="mt-1 text-xs ui-text-copy">> {{ acao }}</p>
+                                            {% empty %}
+                                                <p class="mt-1 text-xs ui-text-muted">Nenhuma mudança registrada.</p>
+                                            {% endfor %}
+                                        {% endfor %}
+                                        <p class="mt-4 text-xs font-bold">Veredito</p>
+                                        <p class="mt-1 text-xs ui-text-copy">> {{ personagem.veredito }}</p>
+                                    </article>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </aside>
+                </div>
             </div>
         {% endif %}
         <form id="csrf-form" class="hidden">{% csrf_token %}</form>

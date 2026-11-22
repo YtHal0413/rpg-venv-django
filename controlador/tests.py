@@ -1204,6 +1204,318 @@ class CampaignTests(TestCase):
             "Histórico de sessões",
         )
 
+    def test_chatbot_interprets_absent_character_and_persists_context(self):
+        ficha = FichaPersonagem.objects.create(
+            usuario=self.jogador,
+            nome="Aventureiro",
+            aspecto="Corajoso",
+            estrutura_json={"visibilidade": "todos", "colunas": {}},
+        )
+        FichaCampanha.objects.create(campanha=self.campanha, ficha=ficha)
+        sessao = iniciar_sessao(self.campanha)
+
+        resposta_gemini = {
+            "mensagens": [{
+                "personagem": "Aventureiro",
+                "texto": "Seguro a lanterna e investigo a porta.",
+                "rolagens": [{
+                    "teste": "Percepção",
+                    "quantidade": 1,
+                    "dados": 20,
+                    "dificuldade": 10,
+                    "explosao": False,
+                }],
+            }]
+        }
+        self.client.force_login(self.mestre)
+        with mock.patch(
+            "controlador.chatbot._chamar_gemini",
+            return_value=resposta_gemini,
+        ):
+            response = self.client.post(
+                reverse("api_chatbot_campanha", args=[self.campanha.pk]),
+                data=json.dumps({"comando": "Role percepção e investigue a porta"}),
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        dados = response.json()
+        self.assertEqual(dados["mensagens"][0]["personagem"], "Aventureiro")
+        self.assertEqual(dados["mensagens"][0]["rolagens"][0]["dados"], 20)
+        sessao.refresh_from_db()
+        self.assertEqual(len(sessao.chatbot_json["mensagens"]), 2)
+
+    def test_chatbot_handles_multiple_absent_characters_without_crossing_stats(self):
+        jogador_extra = Usuario.objects.create_user(
+            email="offline-extra@example.com",
+            username="JogadorExtra",
+            password="SenhaForte-2098!",
+        )
+        entrar_em_campanha(jogador_extra, self.campanha.codigo_convite)
+        CampanhaParticipante.objects.filter(
+            campanha=self.campanha,
+            usuario=jogador_extra,
+        ).update(ultimo_acesso=None)
+        ficha_um = FichaPersonagem.objects.create(
+            usuario=self.jogador,
+            nome="Ana",
+            aspecto="Investigadora",
+            estrutura_json={
+                "visibilidade": "todos",
+                "colunas": {
+                    "1": {
+                        "abas": [{
+                            "titulo": "Geral",
+                            "ehPadrao": True,
+                            "secoes": [{
+                                "titulo": "Vitalidade",
+                                "tipo": "AtributoDuplo",
+                                "componentes": [{
+                                    "rotulo": "Vida",
+                                    "valorAtual": 12,
+                                    "valorMaximo": 20,
+                                }],
+                            }],
+                        }]
+                    }
+                },
+            },
+        )
+        ficha_dois = FichaPersonagem.objects.create(
+            usuario=jogador_extra,
+            nome="Beto",
+            aspecto="Guarda",
+            estrutura_json={
+                "visibilidade": "todos",
+                "colunas": {
+                    "1": {
+                        "abas": [{
+                            "titulo": "Geral",
+                            "ehPadrao": True,
+                            "secoes": [{
+                                "titulo": "Vitalidade",
+                                "tipo": "AtributoDuplo",
+                                "componentes": [{
+                                    "rotulo": "Vida",
+                                    "valorAtual": 30,
+                                    "valorMaximo": 30,
+                                }],
+                            }],
+                        }]
+                    }
+                },
+            },
+        )
+        FichaCampanha.objects.create(campanha=self.campanha, ficha=ficha_um)
+        FichaCampanha.objects.create(campanha=self.campanha, ficha=ficha_dois)
+        sessao = iniciar_sessao(self.campanha)
+
+        resposta_gemini = {
+            "mensagens": [
+                {
+                    "personagem": "Ana",
+                    "texto": "Ana permanece com 12/20 PV.",
+                    "rolagens": [],
+                },
+                {
+                    "personagem": "Beto",
+                    "texto": "Beto permanece com 30/30 PV.",
+                    "rolagens": [],
+                },
+            ]
+        }
+        self.client.force_login(self.mestre)
+        with mock.patch(
+            "controlador.chatbot._chamar_gemini",
+            return_value=resposta_gemini,
+        ):
+            response = self.client.post(
+                reverse("api_chatbot_campanha", args=[self.campanha.pk]),
+                data=json.dumps({"comando": "Mantenham suas posições"}),
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        nomes = [item["personagem"] for item in response.json()["mensagens"]]
+        self.assertEqual(nomes, ["Ana", "Beto"])
+        self.assertEqual(
+            set(response.json()["faltosos"]),
+            {"Ana", "Beto"},
+        )
+        sessao.refresh_from_db()
+        self.assertEqual(len(sessao.chatbot_json["mensagens"]), 3)
+
+    def test_chatbot_only_rolls_when_explicitly_requested_and_mixes_different_dice(self):
+        ficha = FichaPersonagem.objects.create(
+            usuario=self.jogador,
+            nome="Aventureiro",
+            aspecto="Corajoso",
+        )
+        FichaCampanha.objects.create(campanha=self.campanha, ficha=ficha)
+        iniciar_sessao(self.campanha)
+        self.client.force_login(self.mestre)
+
+        with mock.patch(
+            "controlador.chatbot._chamar_gemini",
+            return_value={
+                "mensagens": [{
+                    "personagem": "Aventureiro",
+                    "texto": "Mantenho a posição.",
+                    "rolagens": [{
+                        "teste": "Percepção",
+                        "dados": 20,
+                        "quantidade": 1,
+                    }],
+                }]
+            },
+        ):
+            resposta_sem_pedido = self.client.post(
+                reverse("api_chatbot_campanha", args=[self.campanha.pk]),
+                data=json.dumps({"comando": "Observe a porta e permaneça em silêncio"}),
+                content_type="application/json",
+            )
+        self.assertEqual(resposta_sem_pedido.json()["mensagens"][0]["rolagens"], [])
+        self.assertNotIn("d20", resposta_sem_pedido.json()["mensagens"][0]["texto"])
+
+        with mock.patch(
+            "controlador.chatbot._chamar_gemini",
+            return_value={
+                "mensagens": [{
+                    "personagem": "Aventureiro",
+                    "texto": "Faço os dois testes.",
+                    "rolagens": [
+                        {"teste": "Percepção", "dados": 20, "quantidade": 1, "dificuldade": 12},
+                        {"teste": "Dano", "dados": 6, "quantidade": 2, "explosao": True},
+                    ],
+                }]
+            },
+        ):
+            resposta_com_testes = self.client.post(
+                reverse("api_chatbot_campanha", args=[self.campanha.pk]),
+                data=json.dumps({
+                    "comando": "Role um teste de percepção em d20 e role 2d6 de dano"
+                }),
+                content_type="application/json",
+            )
+
+        mensagem = resposta_com_testes.json()["mensagens"][0]
+        self.assertEqual(len(mensagem["rolagens"]), 2)
+        self.assertIn("Percepção — d20", mensagem["texto"])
+        self.assertIn("Dano — d6", mensagem["texto"])
+        self.assertNotIn("mt-2 rounded-lg", mensagem["texto"])
+
+    def test_chatbot_can_leave_character_when_requested(self):
+        ficha = FichaPersonagem.objects.create(
+            usuario=self.jogador,
+            nome="Aventureiro",
+            aspecto="Corajoso",
+        )
+        FichaCampanha.objects.create(campanha=self.campanha, ficha=ficha)
+        iniciar_sessao(self.campanha)
+        self.client.force_login(self.mestre)
+
+        with mock.patch(
+            "controlador.chatbot._chamar_gemini",
+            return_value={
+                "mensagens": [{
+                    "personagem": "Aventureiro",
+                    "texto": "A ação não exige teste; explico a regra fora da cena.",
+                }]
+            },
+        ):
+            response = self.client.post(
+                reverse("api_chatbot_campanha", args=[self.campanha.pk]),
+                data=json.dumps({
+                    "comando": "Saia do personagem e explique a regra dessa ação"
+                }),
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.json()["mensagens"][0]["personagem"], "Narrador")
+        self.assertEqual(response.json()["mensagens"][0]["rolagens"], [])
+
+    def test_chatbot_rejects_unknown_character_and_invalid_roll_parameters(self):
+        ficha = FichaPersonagem.objects.create(
+            usuario=self.jogador,
+            nome="Aventureiro",
+            aspecto="Corajoso",
+        )
+        FichaCampanha.objects.create(campanha=self.campanha, ficha=ficha)
+        iniciar_sessao(self.campanha)
+
+        resposta_gemini = {
+            "mensagens": [{
+                "personagem": "PersonagemInventado",
+                "texto": "Executa uma ação.",
+                "rolagens": [{
+                    "teste": "Teste inválido",
+                    "quantidade": "muita",
+                    "dados": "muitos",
+                    "dificuldade": "difícil",
+                    "explosao": False,
+                }],
+            }]
+        }
+        self.client.force_login(self.mestre)
+        with mock.patch(
+            "controlador.chatbot._chamar_gemini",
+            return_value=resposta_gemini,
+        ):
+            response = self.client.post(
+                reverse("api_chatbot_campanha", args=[self.campanha.pk]),
+                data=json.dumps({"comando": "Role algum teste"}),
+                content_type="application/json",
+            )
+
+        dados = response.json()
+        self.assertEqual(dados["mensagens"][0]["personagem"], "Aventureiro")
+        rolagem = dados["mensagens"][0]["rolagens"][0]
+        self.assertIn("erro", rolagem)
+        self.assertEqual(rolagem["dados"], 20)
+
+    def test_chatbot_report_is_saved_on_stop_and_displayed_in_history(self):
+        ficha = FichaPersonagem.objects.create(
+            usuario=self.jogador,
+            nome="Aventureiro",
+            aspecto="Corajoso",
+        )
+        FichaCampanha.objects.create(campanha=self.campanha, ficha=ficha)
+        sessao = iniciar_sessao(self.campanha)
+        sessao.chatbot_json = {
+            "mensagens": [
+                {"papel": "mestre", "texto": "Investigue o salão e anote que perdeu 5 PV"},
+                {"papel": "assistente", "personagem": "Aventureiro", "texto": "Investigo. Perco 5 PV e fico com 15/20."},
+            ]
+        }
+        sessao.save(update_fields=["chatbot_json"])
+
+        relatorio = {
+            "personagens": [{
+                "personagem": "Aventureiro",
+                "resumo": "Investigou o salão e encontrou pegadas.",
+                "revisao": [
+                    {"titulo": "Itens/Coletáveis", "acoes": ["Achou 3 moedas"]},
+                    {"titulo": "Status/Integridade", "acoes": ["Perdeu 5 PV; PV atual = 15/20"]},
+                ],
+                "veredito": "Atento ao redor.",
+            }]
+        }
+        self.client.force_login(self.mestre)
+        with mock.patch(
+            "controlador.chatbot._chamar_gemini",
+            return_value=relatorio,
+        ):
+            response = self.client.post(
+                reverse("parar_sessao_campanha", args=[self.campanha.pk])
+            )
+
+        self.assertEqual(response.status_code, 200)
+        sessao.refresh_from_db()
+        self.assertEqual(sessao.relatorio_json["personagens"][0]["personagem"], "Aventureiro")
+        page = self.client.get(reverse("campanha", args=[self.campanha.pk]))
+        self.assertContains(page, "VER RELATÓRIO DA IA")
+        self.assertContains(page, "Relatório da sessão")
+
     def test_campaign_details_load_linked_sheets_in_one_query(self):
         nomes_fichas = []
         for numero in range(3):

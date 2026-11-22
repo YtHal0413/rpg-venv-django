@@ -431,6 +431,7 @@ class SessaoCampanha(models.Model):
     duracao_segundos = models.PositiveIntegerField(null=True, blank=True)
     participantes_json = models.JSONField(default=list)
     relatorio_json = models.JSONField(null=True, blank=True)
+    chatbot_json = models.JSONField(default=dict)
 
     class Meta:
         constraints = [
