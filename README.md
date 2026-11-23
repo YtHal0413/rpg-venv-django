@@ -1,4 +1,32 @@
-# RPG.Venv 0.2 portado para Django
+# RPG.Venv v0.4 portado para Django
+
+## Descrição do Projeto
+
+O projeto consiste em uma plataforma voltada para a criação e o gerenciamento universal de fichas de personagens e campanhas de RPG, visando suprir a falta de plataformas dedicadas a alta customização e sistemas de nicho ou próprios.
+
+Tal proposta foi estruturada para integrar, em um único projeto, competências técnicas assimiladas durante o curso de Tecnologia em Sistemas para Internet: Programação Orientada a Objetos, Desenvolvimento para Web, Banco de Dados e Marketing digital.
+
+## Principais Funcionalidades
+
+- Criador customizável de fichas de personagens.
+- Simulador integrado de rolagens de dados.
+- Criador e controlador de campanhas de RPG.
+- Biblioteca de uploads de PDFs e imagens.
+- Chatbot de interpretação para personagens de jogadores ausentes.
+
+### Outros recursos
+
+- Cadastro, Login e Logout de usuários
+- Edição de dados cadastrais de perfil
+- Simulador de aquisição de chave de acesso à plataforma
+- Criação de templates para replicação rápida de fichas
+- Anexo de arquivos da biblioteca, fichas e templates na campanha
+
+## Arquitetura e Tecnologias
+
+- Backend: Python orientado a objetos + Frameworks/bibliotecas: Django, Pillow e dotenv
+- Frontend: JavaScript, HTML e CSS + Framework: Tailwind CSS
+- Banco de dados: SQLite.
 
 ## Executar localmente no Windows
 
@@ -27,7 +55,4 @@ quando omitida, o projeto usa `gemini-3.1-flash-lite`. O arquivo `.env` é
 carregado pelo Django e ignorado pelo Git para evitar que a chave seja enviada
 ao repositório. Não compartilhe nem publique esse arquivo. Após criar ou alterar
 o `.env`, reinicie o servidor Django.
-
-O projeto gera uma chave aleatória temporária quando `DJANGO_DEBUG` está ligado. Para executar em produção, configure `DJANGO_DEBUG=false`, uma `DJANGO_SECRET_KEY` longa e aleatória e `DJANGO_ALLOWED_HOSTS`; use HTTPS. Segredos não devem ser incluídos no código ou no controle de versão.
-
 
