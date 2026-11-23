@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
+from urllib.error import HTTPError
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -33,6 +34,7 @@ from .models import (
     TemplateFicha,
 )
 from .services import pode_criar_campanha, pode_criar_ficha, pode_participar_campanha
+from .chatbot import GeminiIndisponivel, _chamar_gemini
 from rpgvenv_django.storage import VersionedStaticFilesStorage
 
 
@@ -62,6 +64,123 @@ class StaticAssetVersioningTests(SimpleTestCase):
 
         self.assertRegex(first_url, r"^/static/probe\.js\?v=[0-9a-f]+-[0-9a-f]+$")
         self.assertNotEqual(first_url, second_url)
+
+
+class GeminiApiTests(SimpleTestCase):
+    @override_settings(
+        GEMINI_API_KEY="test-private-key",
+        GEMINI_MODEL="gemini-3.1-flash-lite",
+    )
+    def test_auth_and_quota_errors_are_reported_without_model_retries(self):
+        erros = (
+            (403, "PERMISSION_DENIED", "A chave de teste foi recusada"),
+            (429, "RESOURCE_EXHAUSTED", "Cota indisponível"),
+        )
+        for codigo, status_api, mensagem_api in erros:
+            with self.subTest(codigo=codigo):
+                corpo_erro = json.dumps({
+                    "error": {
+                        "code": codigo,
+                        "status": status_api,
+                        "message": mensagem_api,
+                    }
+                }).encode("utf-8")
+                erro = HTTPError(
+                    "https://generativelanguage.googleapis.com/",
+                    codigo,
+                    "Erro de teste",
+                    {},
+                    BytesIO(corpo_erro),
+                )
+                with (
+                    mock.patch(
+                        "controlador.chatbot.urllib.request.urlopen",
+                        side_effect=erro,
+                    ) as urlopen,
+                    self.assertLogs("controlador.chatbot", level="WARNING") as logs,
+                ):
+                    with self.assertRaises(GeminiIndisponivel) as resultado:
+                        _chamar_gemini("prompt de teste")
+
+                self.assertEqual(urlopen.call_count, 1)
+                self.assertIn(str(codigo), str(resultado.exception))
+                self.assertIn(status_api, str(resultado.exception))
+                self.assertNotIn("test-private-key", "\n".join(logs.output))
+                if codigo == 403:
+                    self.assertIn("recusou a chave", str(resultado.exception))
+                else:
+                    self.assertIn("cota", str(resultado.exception))
+
+    @override_settings(
+        GEMINI_API_KEY="test-private-key",
+        GEMINI_MODEL="modelo-inexistente",
+    )
+    def test_missing_model_tries_the_next_supported_model(self):
+        erro_modelo = HTTPError(
+            "https://generativelanguage.googleapis.com/",
+            404,
+            "Não encontrado",
+            {},
+            BytesIO(b'{"error":{"status":"NOT_FOUND","message":"Modelo ausente"}}'),
+        )
+        resposta = mock.MagicMock()
+        resposta.__enter__.return_value.read.return_value = json.dumps({
+            "candidates": [{
+                "content": {"parts": [{"text": '{"mensagens": []}'}]}
+            }]
+        }).encode("utf-8")
+
+        with mock.patch(
+            "controlador.chatbot.urllib.request.urlopen",
+            side_effect=[erro_modelo, resposta],
+        ) as urlopen:
+            resultado = _chamar_gemini("prompt de teste")
+
+        self.assertEqual(resultado, {"mensagens": []})
+        self.assertEqual(urlopen.call_count, 2)
+
+    @override_settings(
+        GEMINI_API_KEY="test-private-key",
+        GEMINI_MODEL="gemini-3.1-flash-lite",
+    )
+    def test_unavailable_model_retries_once_then_uses_fallback(self):
+        def erro_indisponivel():
+            return HTTPError(
+                "https://generativelanguage.googleapis.com/",
+                503,
+                "Indisponível",
+                {},
+                BytesIO(
+                    b'{"error":{"status":"UNAVAILABLE",'
+                    b'"message":"Alta demanda"}}'
+                ),
+            )
+
+        resposta = mock.MagicMock()
+        resposta.__enter__.return_value.read.return_value = json.dumps({
+            "candidates": [{
+                "content": {"parts": [{"text": '{"mensagens": []}'}]}
+            }]
+        }).encode("utf-8")
+
+        with (
+            mock.patch(
+                "controlador.chatbot.urllib.request.urlopen",
+                side_effect=[erro_indisponivel(), erro_indisponivel(), resposta],
+            ) as urlopen,
+            mock.patch("controlador.chatbot.time.sleep") as sleep,
+        ):
+            resultado = _chamar_gemini("prompt de teste")
+
+        urls = [
+            chamada.args[0].full_url
+            for chamada in urlopen.call_args_list
+        ]
+        self.assertEqual(resultado, {"mensagens": []})
+        self.assertEqual(urlopen.call_count, 3)
+        self.assertEqual(urls[0], urls[1])
+        self.assertIn("gemini-3.5-flash-lite:generateContent", urls[2])
+        sleep.assert_called_once()
 
 
 class AccountFlowTests(TestCase):

@@ -1,14 +1,18 @@
 import json
+import logging
 import random
 import re
+import time
 import urllib.request
 import urllib.error
-from urllib.parse import urlencode
 
 from django.conf import settings
 from django.utils import timezone
 
 from .models import FichaCampanha
+
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiIndisponivel(Exception):
@@ -49,7 +53,7 @@ def _chamar_gemini(prompt):
     modelos = list(dict.fromkeys([
         modelo_configurado,
         "gemini-3.1-flash-lite",
-        "gemini-flash-latest",
+        "gemini-3.5-flash-lite",
     ]))
     corpo = json.dumps(
         {
@@ -61,22 +65,29 @@ def _chamar_gemini(prompt):
         }
     ).encode("utf-8")
     ultimo_erro = None
-    for modelo in modelos:
+    ultimo_codigo_http = None
+    ultimo_status_api = ""
+    for indice_modelo, modelo in enumerate(modelos):
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{modelo}:generateContent?{urlencode({'key': chave})}"
+            f"{modelo}:generateContent"
         )
         requisicao = urllib.request.Request(
             url,
             data=corpo,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": chave,
+            },
             method="POST",
         )
-        try:
-            with urllib.request.urlopen(requisicao, timeout=30) as resposta:
-                dados = json.loads(resposta.read().decode("utf-8"))
-            texto = dados["candidates"][0]["content"]["parts"][0]["text"]
+        tentativas = 2 if indice_modelo == 0 else 1
+        for tentativa in range(tentativas):
             try:
+                with urllib.request.urlopen(requisicao, timeout=30) as resposta:
+                    dados = json.loads(resposta.read().decode("utf-8"))
+                texto = dados["candidates"][0]["content"]["parts"][0]["text"]
+                try:
                     resultado = json.loads(texto)
                     if isinstance(resultado, list):
                         return {"mensagens": resultado}
@@ -92,13 +103,94 @@ def _chamar_gemini(prompt):
                             }],
                         }
                     return resultado
-            except json.JSONDecodeError:
-                return {"mensagens": [{"personagem": "Narrador", "texto": texto}]}
-        except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, KeyError, IndexError) as erro:
-            ultimo_erro = erro
+                except json.JSONDecodeError:
+                    return {"mensagens": [{"personagem": "Narrador", "texto": texto}]}
+            except urllib.error.HTTPError as erro:
+                ultimo_erro = erro
+                ultimo_codigo_http = erro.code
+                ultimo_status_api, mensagem_api = _detalhes_erro_gemini(erro, chave)
+                logger.warning(
+                    "Gemini retornou HTTP %s para o modelo %s (status=%s): %s",
+                    erro.code,
+                    modelo,
+                    ultimo_status_api or "desconhecido",
+                    mensagem_api or "a API não forneceu detalhes",
+                )
+                if erro.code == 404:
+                    break
+                if erro.code == 503:
+                    if tentativa + 1 < tentativas:
+                        time.sleep(random.uniform(1.0, 2.0))
+                        continue
+                    break
+                raise GeminiIndisponivel(
+                    _mensagem_erro_gemini(erro.code, ultimo_status_api)
+                ) from erro
+            except (
+                urllib.error.URLError,
+                TimeoutError,
+                json.JSONDecodeError,
+                KeyError,
+                IndexError,
+            ) as erro:
+                logger.warning(
+                    "Falha na chamada Gemini para o modelo %s (%s)",
+                    modelo,
+                    type(erro).__name__,
+                )
+                raise GeminiIndisponivel(
+                    "Não foi possível concluir a chamada ao Gemini. "
+                    "Verifique a conexão e consulte o log do servidor."
+                ) from erro
     raise GeminiIndisponivel(
-        "Não foi possível consultar o Gemini. Verifique a chave, o modelo e o acesso à API."
+        _mensagem_erro_gemini(ultimo_codigo_http, ultimo_status_api)
     ) from ultimo_erro
+
+
+def _detalhes_erro_gemini(erro, chave):
+    try:
+        dados = json.loads(erro.read().decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return "", ""
+    if not isinstance(dados, dict):
+        return "", ""
+    detalhes = dados.get("error", {})
+    if not isinstance(detalhes, dict):
+        return "", ""
+    mensagem = str(detalhes.get("message", ""))[:500]
+    if chave:
+        mensagem = mensagem.replace(chave, "[redigida]")
+    return str(detalhes.get("status", "")), mensagem
+
+
+def _mensagem_erro_gemini(codigo_http, status_api=""):
+    identificador = f" HTTP {codigo_http}"
+    if status_api:
+        identificador += f" ({status_api})"
+    if codigo_http in {401, 403}:
+        return (
+            f"O Google recusou a chave ou a permissão da API ({identificador}). "
+            "Confira a chave e se a Gemini API está habilitada para o projeto."
+        )
+    if codigo_http == 429:
+        return (
+            f"O limite ou a cota da Gemini API foi atingido ({identificador}). "
+            "Confira os limites de uso do projeto no Google AI Studio."
+        )
+    if codigo_http == 404:
+        return (
+            f"O modelo configurado não foi encontrado pela Gemini API ({identificador}). "
+            "Confira GEMINI_MODEL."
+        )
+    if codigo_http is not None and codigo_http >= 500:
+        return (
+            f"A Gemini API está temporariamente indisponível ({identificador}). "
+            "Tente novamente mais tarde."
+        )
+    return (
+        f"A Gemini API rejeitou a solicitação ({identificador}). "
+        "Consulte o log do servidor para ver o motivo informado pelo Google."
+    )
 
 
 def _rolar(quantidade, dados, dificuldade=None, explosao=False):
